@@ -13,128 +13,142 @@ public class Main {
         String targetHash = HashUtil.sha256(targetPassword);
         String[] prefixes = {"03", "70", "71", "76", "78", "79", "81", "82", "83", "84"};
 
-        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+        ThreadMXBean bean = ManagementFactory.getThreadMXBean();
+        if (!bean.isThreadCpuTimeSupported()) {
+            System.err.println("Thread CPU time is not supported on this JVM.");
+            return;
+        }
+        bean.setThreadCpuTimeEnabled(true);
 
-        // === Sequential Cracker
+        // Helper lambdas to get memory and CPU usage
+        Runtime runtime = Runtime.getRuntime();
+
+        // Total CPU time across all threads
+        java.util.function.Supplier<Long> getCpuTime = () -> {
+            long[] threadIds = bean.getAllThreadIds();
+            long totalCpu = 0;
+            for (long id : threadIds) {
+                long time = bean.getThreadCpuTime(id);
+                if (time != -1) totalCpu += time;
+            }
+            return totalCpu;
+        };
+
+        // Get used memory in MB
+        java.util.function.Supplier<Double> getUsedMemoryMB = () -> (runtime.totalMemory() - runtime.freeMemory()) / (1024.0 * 1024.0);
+
+        // --- Sequential benchmark ---
         long seqTotalTime = 0;
+        long seqCpuTotal = 0;
         double seqMemTotal = 0;
-        double seqCpuTotal = 0;
         String seqResult = null;
 
         for (int i = 0; i < RUNS; i++) {
-            double memBefore = getUsedMemoryInMB();
-            double cpuBefore = getCPUTimeSeconds();
+            System.gc();
+            long memBefore = (runtime.totalMemory() - runtime.freeMemory());
+            long cpuBefore = getCpuTime.get();
             long start = System.nanoTime();
 
             seqResult = SequentialCracker.crackPassword(prefixes, targetHash);
 
             long end = System.nanoTime();
-            double cpuAfter = getCPUTimeSeconds();
-            double memAfter = getUsedMemoryInMB();
+            long cpuAfter = getCpuTime.get();
+            long memAfter = (runtime.totalMemory() - runtime.freeMemory());
 
             seqTotalTime += (end - start);
-            seqMemTotal += (memAfter - memBefore);
             seqCpuTotal += (cpuAfter - cpuBefore);
+            seqMemTotal += (memAfter - memBefore) / (1024.0 * 1024.0); // bytes to MB
         }
 
         double seqAvgTime = seqTotalTime / (RUNS * 1e9);
+        double seqAvgCPU = seqCpuTotal / (RUNS * 1e9);
         double seqAvgMem = seqMemTotal / RUNS;
-        double seqAvgCPU = seqCpuTotal / RUNS;
 
-        // === Recursive Parallel Cracker
+        // --- Recursive Parallel benchmark ---
         long recParTotalTime = 0;
+        long recParCpuTotal = 0;
         double recParMemTotal = 0;
-        double recParCpuTotal = 0;
         String recParResult = null;
 
         for (int i = 0; i < RUNS; i++) {
-            double memBefore = getUsedMemoryInMB();
-            double cpuBefore = getCPUTimeSeconds();
+            System.gc();
+            long memBefore = (runtime.totalMemory() - runtime.freeMemory());
+            long cpuBefore = getCpuTime.get();
             long start = System.nanoTime();
 
             recParResult = ParallelCracker.crackPassword(prefixes, targetHash);
 
             long end = System.nanoTime();
-            double cpuAfter = getCPUTimeSeconds();
-            double memAfter = getUsedMemoryInMB();
+            long cpuAfter = getCpuTime.get();
+            long memAfter = (runtime.totalMemory() - runtime.freeMemory());
 
             recParTotalTime += (end - start);
-            recParMemTotal += (memAfter - memBefore);
             recParCpuTotal += (cpuAfter - cpuBefore);
+            recParMemTotal += (memAfter - memBefore) / (1024.0 * 1024.0);
         }
 
         double recParAvgTime = recParTotalTime / (RUNS * 1e9);
-        double recParAvgMem = recParMemTotal / RUNS;
-        double recParAvgCPU = recParCpuTotal / RUNS;
+        double recParAvgCPU = recParCpuTotal / (RUNS * 1e9);
+        double recParAvgMem = recParMemTotal / RUNS;  //Highest because of overhead
 
-        // === Full Parallel Cracker
+        // --- Full Parallel benchmark ---
         long fullParTotalTime = 0;
+        long fullParCpuTotal = 0;
         double fullParMemTotal = 0;
-        double fullParCpuTotal = 0;
         String fullParResult = null;
 
         for (int i = 0; i < RUNS; i++) {
-            double memBefore = getUsedMemoryInMB();
-            double cpuBefore = getCPUTimeSeconds();
+            System.gc();
+            long memBefore = (runtime.totalMemory() - runtime.freeMemory());
+            long cpuBefore = getCpuTime.get();
             long start = System.nanoTime();
 
             fullParResult = FullParallelCracker.crackPassword(prefixes, targetHash);
 
             long end = System.nanoTime();
-            double cpuAfter = getCPUTimeSeconds();
-            double memAfter = getUsedMemoryInMB();
+            long cpuAfter = getCpuTime.get();
+            long memAfter = (runtime.totalMemory() - runtime.freeMemory());
 
             fullParTotalTime += (end - start);
-            fullParMemTotal += (memAfter - memBefore);
             fullParCpuTotal += (cpuAfter - cpuBefore);
+            fullParMemTotal += (memAfter - memBefore) / (1024.0 * 1024.0);
         }
 
         double fullParAvgTime = fullParTotalTime / (RUNS * 1e9);
+        double fullParAvgCPU = fullParCpuTotal / (RUNS * 1e9);
         double fullParAvgMem = fullParMemTotal / RUNS;
-        double fullParAvgCPU = fullParCpuTotal / RUNS;
 
-        // === Speed-up
-        double recSpeedup = seqAvgTime / recParAvgTime;
-        double fullSpeedup = seqAvgTime / fullParAvgTime;
+        // Threads used by full parallel
+        int fullParThreads = FullParallelCracker.getThreadCount();
 
-        // === Console Output
+        // Speed-up calculations
+        double recSpeedup = seqAvgTime > 0 ? seqAvgTime / recParAvgTime : 0;
+        double fullSpeedup = seqAvgTime > 0 ? seqAvgTime / fullParAvgTime : 0;
+
+        // Timestamp
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
+
+        // Print results
         System.out.println("=== Sequential Cracker ===");
-        System.out.println("Password found: " + seqResult);
-        System.out.printf("Average time: %.3f s | Mem: %.2f MB | CPU: %.3f s%n%n", seqAvgTime, seqAvgMem, seqAvgCPU);
+        System.out.printf("Password found: %s%nAverage time: %.3f s | Memory: %.2f MB | CPU: %.3f s%n%n", seqResult, seqAvgTime, seqAvgMem, seqAvgCPU);
 
         System.out.println("=== Recursive Parallel Cracker ===");
-        System.out.println("Password found: " + recParResult);
-        System.out.printf("Average time: %.3f s | Mem: %.2f MB | CPU: %.3f s%n", recParAvgTime, recParAvgMem, recParAvgCPU);
-        System.out.printf("Speed-up: %.2fx%n%n", recSpeedup);
+        System.out.printf("Password found: %s%nAverage time: %.3f s | Memory: %.2f MB | CPU: %.3f s%n%n", recParResult, recParAvgTime, recParAvgMem, recParAvgCPU);
 
         System.out.println("=== Full Parallel Cracker ===");
-        System.out.println("Password found: " + fullParResult);
-        System.out.printf("Average time: %.3f s | Mem: %.2f MB | CPU: %.3f s%n", fullParAvgTime, fullParAvgMem, fullParAvgCPU);
-        System.out.printf("Speed-up: %.2fx | Threads: %d%n%n", fullSpeedup, FullParallelCracker.getThreadCount());
+        System.out.printf("Password found: %s%nAverage time: %.3f s | Memory: %.2f MB | CPU: %.3f s | Threads: %d%n%n", fullParResult, fullParAvgTime, fullParAvgMem, fullParAvgCPU, fullParThreads);
 
-        // === PDF Report
+        System.out.printf("Speed-up: Recursive=%.2fx | Full Parallel=%.2fx%n", recSpeedup, fullSpeedup);
+
+        // Generate PDF report
         PDFReportGenerator.generate(
                 timestamp,
                 seqResult, seqAvgTime, seqAvgMem, seqAvgCPU,
                 recParResult, recParAvgTime, recParAvgMem, recParAvgCPU, recSpeedup,
                 fullParResult, fullParAvgTime, fullParAvgMem, fullParAvgCPU, fullSpeedup,
-                FullParallelCracker.getThreadCount()
+                fullParThreads
         );
 
         System.out.println("📄 PDF report generated as CrackReport.pdf");
-    }
-
-    // === Memory usage helper
-    public static double getUsedMemoryInMB() {
-        Runtime runtime = Runtime.getRuntime();
-        return (runtime.totalMemory() - runtime.freeMemory()) / (1024.0 * 1024.0);
-    }
-
-    // === CPU time helper
-    public static double getCPUTimeSeconds() {
-        ThreadMXBean bean = ManagementFactory.getThreadMXBean();
-        return bean.isCurrentThreadCpuTimeSupported()
-                ? bean.getCurrentThreadCpuTime() / 1_000_000_000.0
-                : 0.0;
     }
 }

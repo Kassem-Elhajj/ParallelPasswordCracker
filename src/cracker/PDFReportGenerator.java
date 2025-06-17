@@ -9,10 +9,10 @@ public class PDFReportGenerator {
 
     public static void generate(
             String timestamp,
-            String seqResult, double seqAvgTime, double seqAvgMem, double seqAvgCPU,
-            String recParResult, double recParAvgTime, double recParAvgMem, double recParAvgCPU, double recSpeedup,
-            String fullParResult, double fullParAvgTime, double fullParAvgMem, double fullParAvgCPU, double fullSpeedup,
-            int fullParThreads
+            String seqResult, double seqAvgTime, double seqAvgMem, double seqAvgCPUPercent,
+            String recParResult, double recParAvgTime, double recParAvgMem, double recParAvgCPUPercent, double recSpeedup,
+            String fullParResult, double fullParAvgTime, double fullParAvgMem, double fullParAvgCPUPercent,
+            double fullSpeedup, int fullParThreads
     ) {
         Document document = new Document();
         try {
@@ -43,7 +43,7 @@ public class PDFReportGenerator {
             Font cellFont = FontFactory.getFont(FontFactory.HELVETICA, 12);
 
             // Header
-            String[] headers = {"Method", "Password Found", "Avg Time (s)", "Avg Mem (MB)", "Avg CPU (s)"};
+            String[] headers = {"Method", "Password Found", "Avg Time (s)", "Avg Mem (MB)", "Avg CPU (%)"};
             for (String header : headers) {
                 PdfPCell cell = new PdfPCell(new Phrase(header, headerFont));
                 cell.setHorizontalAlignment(Element.ALIGN_CENTER);
@@ -51,24 +51,26 @@ public class PDFReportGenerator {
                 table.addCell(cell);
             }
 
-            // Row data
+            // Sequential
             table.addCell(new Phrase("Sequential", cellFont));
             table.addCell(new Phrase(seqResult, cellFont));
             table.addCell(new Phrase(String.format("%.3f", seqAvgTime), cellFont));
             table.addCell(new Phrase(String.format("%.2f", seqAvgMem), cellFont));
-            table.addCell(new Phrase(String.format("%.3f", seqAvgCPU), cellFont));
+            table.addCell(new Phrase(String.format("%.2f", seqAvgCPUPercent), cellFont));
 
+            // Recursive Parallel
             table.addCell(new Phrase("Recursive Parallel", cellFont));
             table.addCell(new Phrase(recParResult, cellFont));
             table.addCell(new Phrase(String.format("%.3f", recParAvgTime), cellFont));
             table.addCell(new Phrase(String.format("%.2f", recParAvgMem), cellFont));
-            table.addCell(new Phrase(String.format("%.3f", recParAvgCPU), cellFont));
+            table.addCell(new Phrase(String.format("%.2f", recParAvgCPUPercent), cellFont));
 
+            // Full Parallel
             table.addCell(new Phrase("Full Parallel", cellFont));
             table.addCell(new Phrase(fullParResult + " (Threads: " + fullParThreads + ")", cellFont));
             table.addCell(new Phrase(String.format("%.3f", fullParAvgTime), cellFont));
             table.addCell(new Phrase(String.format("%.2f", fullParAvgMem), cellFont));
-            table.addCell(new Phrase(String.format("%.3f", fullParAvgCPU), cellFont));
+            table.addCell(new Phrase(String.format("%.2f", fullParAvgCPUPercent), cellFont));
 
             document.add(table);
 
