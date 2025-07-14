@@ -6,7 +6,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 public class Main {
-    private static final int RUNS = 5;
+    private static final int RUNS = 1;
 
     public static void main(String[] args) {
         String targetPassword = "84429446";  // Known password for test

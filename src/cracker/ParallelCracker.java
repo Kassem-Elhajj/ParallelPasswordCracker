@@ -49,7 +49,7 @@ public class ParallelCracker extends RecursiveTask<String> {
             String rightResult = right.compute();
             String leftResult = left.join();
 
-            // Prefer left if both found
+            
             return leftResult != null ? leftResult : rightResult;
         }
     }
