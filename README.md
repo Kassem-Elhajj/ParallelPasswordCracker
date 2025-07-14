@@ -11,3 +11,8 @@
 -->The report of the project is by the name of "ParalledCracker_Report".
 
 -->This project was delivered to DR. Mohammad Aoudi
+
+-->BY: 
+
+        Kassem Elhajj(6360)
+        Mahdi Abou Hamdan(6359)
